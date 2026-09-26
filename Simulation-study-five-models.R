@@ -40,11 +40,6 @@ if (!requireNamespace("TauStar", quietly = TRUE)) {
   install.packages("TauStar")
 }
 
-# energy
-if (!requireNamespace("energy", quietly = TRUE)) {
-  install.packages("energy")
-}
-
 # HHG
 #
 # HHG has been archived from the current CRAN repository.
@@ -63,9 +58,7 @@ if (!requireNamespace("HHG", quietly = TRUE)) {
   )
 }
 
-
 library(TauStar)
-library(energy)
 library(HHG)
 
 
@@ -460,6 +453,11 @@ tau_statistic <- function(
 
 ############################################################
 # 13. DISTANCE COVARIANCE STATISTIC
+#
+# The distance covariance is computed directly from the
+# doubly centered Euclidean distance matrices.
+#
+# No additional package is required.
 ############################################################
 
 dcov_statistic <- function(
@@ -470,10 +468,71 @@ dcov_statistic <- function(
   
   Y <- as_data_matrix(Y)
   
-  as.numeric(
-    energy::dcov(
-      X,
-      Y
+  n <- nrow(X)
+  
+  
+  ##########################################################
+  # Euclidean distance matrices
+  ##########################################################
+  
+  A <- as.matrix(
+    dist(X)
+  )
+  
+  B <- as.matrix(
+    dist(Y)
+  )
+  
+  
+  ##########################################################
+  # Double centering
+  ##########################################################
+  
+  A <- A -
+    matrix(
+      rowMeans(A),
+      nrow = n,
+      ncol = n
+    ) -
+    matrix(
+      colMeans(A),
+      nrow = n,
+      ncol = n,
+      byrow = TRUE
+    ) +
+    mean(A)
+  
+  
+  B <- B -
+    matrix(
+      rowMeans(B),
+      nrow = n,
+      ncol = n
+    ) -
+    matrix(
+      colMeans(B),
+      nrow = n,
+      ncol = n,
+      byrow = TRUE
+    ) +
+    mean(B)
+  
+  
+  ##########################################################
+  # Sample distance covariance
+  ##########################################################
+  
+  dcov2 <- mean(
+    A * B
+  )
+  
+  
+  return(
+    sqrt(
+      max(
+        dcov2,
+        0
+      )
     )
   )
 }
@@ -878,12 +937,12 @@ run_complete_simulation <- function(
 ############################################################
 
 simulation_results <-
-run_complete_simulation(
-n.grid = c(30, 50, 100),
-B = 5000,
-M = 1000,
-alpha = 0.05
-)
+  run_complete_simulation(
+    n.grid = c(30, 50, 100),
+    B = 5000,
+    M = 1000,
+    alpha = 0.05
+  )
 
 
 ############################################################
@@ -893,9 +952,9 @@ alpha = 0.05
 ############################################################
 
 write.csv(
-simulation_results,
-file = "comparative_power_results.csv",
-row.names = FALSE
+  simulation_results,
+  file = "comparative_power_results.csv",
+  row.names = FALSE
 )
 
 
@@ -904,5 +963,5 @@ row.names = FALSE
 ############################################################
 
 print(
-simulation_results
+  simulation_results
 )
