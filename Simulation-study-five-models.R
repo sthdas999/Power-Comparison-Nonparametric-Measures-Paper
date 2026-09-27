@@ -1,65 +1,18 @@
 ############################################################
-# COMPARATIVE POWER STUDY
-#
-# Tests:
-#   1. Bergsma--Dassios tau*
-#   2. Distance covariance
-#   3. Heller--Heller--Gorfine (HHG)
-#
-# Models:
-#   I.   Linear dependence
-#   II.  Quadratic dependence
-#   III. Circular dependence
-#   IV.  Ordinal dependence
-#   V.   Five-dimensional Gaussian dependence
-#
-# Sample sizes:
-#   n = 30, 50, 100
-#
-# Monte Carlo replications:
-#   B = 5000
-#
-# Permutations:
-#   M = 1000
-#
-# Significance level:
-#   alpha = 0.05
-#
-# IMPORTANT:
-# This code is provided for execution by the user.
-# No simulation results are generated in this manuscript.
-############################################################
-
-
-############################################################
 # 1. INSTALL AND LOAD REQUIRED PACKAGES
 ############################################################
 
+# ----------------------------------------------------------
 # TauStar
+# ----------------------------------------------------------
+
 if (!requireNamespace("TauStar", quietly = TRUE)) {
+  
   install.packages("TauStar")
-}
-
-# HHG
-#
-# HHG has been archived from the current CRAN repository.
-# Therefore, install the archived CRAN version if necessary.
-############################################################
-
-if (!requireNamespace("HHG", quietly = TRUE)) {
   
-  hhg_url <-
-    "https://cran.r-project.org/src/contrib/Archive/HHG/HHG_2.3.7.tar.gz"
-  
-  install.packages(
-    hhg_url,
-    repos = NULL,
-    type = "source"
-  )
 }
 
 library(TauStar)
-library(HHG)
 
 
 ############################################################
@@ -70,9 +23,9 @@ set.seed(20260921)
 
 n.grid <- c(30, 50, 100)
 
-B <- 5000
+B <- 2000
 
-M <- 1000
+M <- 500
 
 alpha <- 0.05
 
@@ -454,7 +407,7 @@ tau_statistic <- function(
 ############################################################
 # 13. DISTANCE COVARIANCE STATISTIC
 #
-# The distance covariance is computed directly from the
+# The distance covariance is computed directly from
 # doubly centered Euclidean distance matrices.
 #
 # No additional package is required.
@@ -526,7 +479,6 @@ dcov_statistic <- function(
     A * B
   )
   
-  
   return(
     sqrt(
       max(
@@ -539,64 +491,7 @@ dcov_statistic <- function(
 
 
 ############################################################
-# 14. DISTANCE MATRICES FOR HHG
-############################################################
-
-distance_matrix <- function(X) {
-  
-  X <- as_data_matrix(X)
-  
-  as.matrix(
-    dist(X)
-  )
-}
-
-
-############################################################
-# 15. HHG TEST
-#
-# HHG accepts distance matrices as its input.
-#
-# The statistic used here is the sum of Pearson
-# chi-square statistics, which is one of the standard
-# HHG statistics.
-############################################################
-
-hhg_test <- function(
-    X,
-    Y,
-    M = 1000) {
-  
-  X <- as_data_matrix(X)
-  
-  Y <- as_data_matrix(Y)
-  
-  Dx <- distance_matrix(X)
-  
-  Dy <- distance_matrix(Y)
-  
-  result <- HHG::hhg.test(
-    Dx,
-    Dy,
-    ties = TRUE,
-    w.sum = 0,
-    w.max = 2,
-    nr.perm = M,
-    is.sequential = FALSE,
-    tables.wanted = FALSE,
-    perm.stats.wanted = FALSE
-  )
-  
-  return(
-    as.numeric(
-      result$perm.pval.hhg.sc
-    )
-  )
-}
-
-
-############################################################
-# 16. GENERIC PERMUTATION TEST
+# 14. GENERIC PERMUTATION TEST
 #
 # Used for tau* and distance covariance.
 ############################################################
@@ -613,10 +508,20 @@ permutation_test <- function(
   
   n <- nrow(X)
   
+  
+  ##########################################################
+  # Observed statistic
+  ##########################################################
+  
   observed <- statistic_function(
     X,
     Y
   )
+  
+  
+  ##########################################################
+  # Permutation statistics
+  ##########################################################
   
   permuted_statistics <- numeric(M)
   
@@ -629,7 +534,11 @@ permutation_test <- function(
     )
     
     Y.permuted <-
-      Y[permutation, , drop = FALSE]
+      Y[
+        permutation,
+        ,
+        drop = FALSE
+      ]
     
     permuted_statistics[m] <-
       statistic_function(
@@ -637,6 +546,11 @@ permutation_test <- function(
         Y.permuted
       )
   }
+  
+  
+  ##########################################################
+  # Permutation p-value
+  ##########################################################
   
   p.value <- (
     1 +
@@ -654,7 +568,7 @@ permutation_test <- function(
 
 
 ############################################################
-# 17. TAU* PERMUTATION TEST
+# 15. TAU* PERMUTATION TEST
 ############################################################
 
 tau_star_test <- function(
@@ -672,7 +586,7 @@ tau_star_test <- function(
 
 
 ############################################################
-# 18. DISTANCE COVARIANCE PERMUTATION TEST
+# 16. DISTANCE COVARIANCE PERMUTATION TEST
 ############################################################
 
 dcov_test <- function(
@@ -690,7 +604,7 @@ dcov_test <- function(
 
 
 ############################################################
-# 19. ONE MONTE CARLO REPLICATION
+# 17. ONE MONTE CARLO REPLICATION
 ############################################################
 
 one_replication <- function(
@@ -698,6 +612,7 @@ one_replication <- function(
     n,
     M = 1000,
     alpha = 0.05) {
+  
   
   ##########################################################
   # Generate data
@@ -736,17 +651,6 @@ one_replication <- function(
   
   
   ##########################################################
-  # HHG
-  ##########################################################
-  
-  p_hhg <- hhg_test(
-    X = X,
-    Y = Y,
-    M = M
-  )
-  
-  
-  ##########################################################
   # Rejection indicators
   ##########################################################
   
@@ -760,11 +664,6 @@ one_replication <- function(
       p_dcov <= alpha
     )
   
-  rejection_hhg <-
-    as.numeric(
-      p_hhg <= alpha
-    )
-  
   
   ##########################################################
   # Return results
@@ -773,38 +672,40 @@ one_replication <- function(
   return(
     c(
       tau_star = rejection_tau,
-      dCov = rejection_dcov,
-      HHG = rejection_hhg
+      dCov = rejection_dcov
     )
   )
 }
 
 
 ############################################################
-# 20. RUN ONE MODEL AND ONE SAMPLE SIZE
+# 18. RUN ONE MODEL AND ONE SAMPLE SIZE
 ############################################################
 
 run_condition <- function(
     model,
     n,
-    B = 5000,
-    M = 1000,
+    B = 2000,
+    M = 500,
     alpha = 0.05) {
   
   rejection_matrix <- matrix(
     0,
     nrow = B,
-    ncol = 3
+    ncol = 2
   )
   
   colnames(
     rejection_matrix
   ) <- c(
     "tau_star",
-    "dCov",
-    "HHG"
+    "dCov"
   )
   
+  
+  ##########################################################
+  # Monte Carlo replications
+  ##########################################################
   
   for (b in seq_len(B)) {
     
@@ -815,7 +716,6 @@ run_condition <- function(
         M = M,
         alpha = alpha
       )
-    
     
     if (
       b %% 100 == 0
@@ -851,7 +751,6 @@ run_condition <- function(
       Sample_Size = n,
       tau_star = power["tau_star"],
       dCov = power["dCov"],
-      HHG = power["HHG"],
       row.names = NULL
     )
   )
@@ -859,19 +758,23 @@ run_condition <- function(
 
 
 ############################################################
-# 21. COMPLETE SIMULATION
+# 19. COMPLETE SIMULATION
 ############################################################
 
 run_complete_simulation <- function(
     n.grid = c(30, 50, 100),
-    B = 5000,
-    M = 1000,
+    B = 2000,
+    M = 500,
     alpha = 0.05) {
   
   all_results <- list()
   
   counter <- 1
   
+  
+  ##########################################################
+  # Loop over models and sample sizes
+  ##########################################################
   
   for (model in 1:5) {
     
@@ -903,22 +806,23 @@ run_complete_simulation <- function(
           alpha = alpha
         )
       
-      
       counter <- counter + 1
     }
   }
   
+  
+  ##########################################################
+  # Combine results
+  ##########################################################
   
   final_results <- do.call(
     rbind,
     all_results
   )
   
-  
   rownames(
     final_results
   ) <- NULL
-  
   
   return(
     final_results
@@ -927,28 +831,22 @@ run_complete_simulation <- function(
 
 
 ############################################################
-# 22. RUN THE SIMULATION
+# 20. RUN THE SIMULATION
 #
-# IMPORTANT:
-# This command is intentionally commented out.
-#
-# Uncomment it only when you want to execute the
-# complete simulation.
+# Uncomment/run this command when the simulation is required.
 ############################################################
 
 simulation_results <-
   run_complete_simulation(
     n.grid = c(30, 50, 100),
-    B = 5000,
-    M = 1000,
+    B = 2000,
+    M = 500,
     alpha = 0.05
   )
 
 
 ############################################################
-# 23. SAVE THE RESULTS
-#
-# Execute after the simulation has been completed.
+# 21. SAVE THE RESULTS
 ############################################################
 
 write.csv(
@@ -959,7 +857,7 @@ write.csv(
 
 
 ############################################################
-# 24. OPTIONAL: DISPLAY THE RESULTS
+# 22. DISPLAY THE RESULTS
 ############################################################
 
 print(
