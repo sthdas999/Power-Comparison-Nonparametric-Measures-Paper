@@ -1,685 +1,665 @@
 ############################################################
-# 1. INSTALL AND LOAD REQUIRED PACKAGES
+# COMPARATIVE POWER SIMULATION
+#
+# Tests:
+#   1. Bergsma--Dassios tau*
+#   2. Distance covariance
+#   3. HHG-style graph-based statistic
+#
+# The HHG-style statistic is implemented directly in R.
+# No HHG package is required.
 ############################################################
 
-# ----------------------------------------------------------
-# TauStar
-# ----------------------------------------------------------
-
-if (!requireNamespace("TauStar", quietly = TRUE)) {
-  
-  install.packages("TauStar")
-  
-}
-
-library(TauStar)
-
-
-############################################################
-# 2. SIMULATION SETTINGS
-############################################################
+rm(list = ls())
+gc()
 
 set.seed(20260921)
+
+############################################################
+# 1. SIMULATION SETTINGS
+############################################################
 
 n.grid <- c(30, 50, 100)
 
 B <- 2000
-
 M <- 500
-
 alpha <- 0.05
 
-
 ############################################################
-# 3. MODEL I
-#    Linear dependence
-#
-#    Y = X + epsilon
-#
-#    X ~ N(0,1)
-#    epsilon ~ N(0,0.5^2)
+# 2. TAU* PACKAGE
 ############################################################
 
-generate_model_1 <- function(n) {
-  
-  X <- rnorm(
-    n,
-    mean = 0,
-    sd = 1
-  )
-  
-  epsilon <- rnorm(
-    n,
-    mean = 0,
-    sd = 0.5
-  )
-  
-  Y <- X + epsilon
-  
-  return(
-    list(
-      X = X,
-      Y = Y
-    )
+if (!requireNamespace("TauStar", quietly = TRUE)) {
+  install.packages(
+    "TauStar",
+    repos = "https://cloud.r-project.org"
   )
 }
 
+library(TauStar)
 
 ############################################################
-# 4. MODEL II
-#    Quadratic dependence
-#
-#    Y = X^2 + epsilon
-#
-#    X ~ N(0,1)
-#    epsilon ~ N(0,0.5^2)
+# 3. BERGSMA--DASSIOS TAU*
 ############################################################
 
-generate_model_2 <- function(n) {
+tau_star_scalar <- function(x, y) {
   
-  X <- rnorm(
-    n,
-    mean = 0,
-    sd = 1
-  )
+  x <- as.numeric(x)
+  y <- as.numeric(y)
   
-  epsilon <- rnorm(
-    n,
-    mean = 0,
-    sd = 0.5
-  )
+  ok <- is.finite(x) & is.finite(y)
   
-  Y <- X^2 + epsilon
+  x <- x[ok]
+  y <- y[ok]
   
-  return(
-    list(
-      X = X,
-      Y = Y
-    )
-  )
-}
-
-
-############################################################
-# 5. MODEL III
-#    Circular dependence
-#
-#    X = R cos(theta)
-#    Y = R sin(theta)
-#
-#    R = 1 + 0.1 epsilon
-#    theta ~ Uniform(0,2*pi)
-############################################################
-
-generate_model_3 <- function(n) {
-  
-  theta <- runif(
-    n,
-    min = 0,
-    max = 2 * pi
-  )
-  
-  epsilon <- rnorm(n)
-  
-  R <- 1 + 0.1 * epsilon
-  
-  X <- R * cos(theta)
-  
-  Y <- R * sin(theta)
-  
-  return(
-    list(
-      X = X,
-      Y = Y
-    )
-  )
-}
-
-
-############################################################
-# 6. MODEL IV
-#    Ordinal dependence
-#
-#    Y* = X + epsilon
-#
-#    Y = 1 if Y* <= -0.5
-#        2 if -0.5 < Y* <= 0.5
-#        3 if Y* > 0.5
-############################################################
-
-generate_model_4 <- function(n) {
-  
-  X <- rnorm(n)
-  
-  epsilon <- rnorm(n)
-  
-  Y.star <- X + epsilon
-  
-  Y <- ifelse(
-    Y.star <= -0.5,
-    1,
-    ifelse(
-      Y.star <= 0.5,
-      2,
-      3
-    )
-  )
-  
-  return(
-    list(
-      X = X,
-      Y = Y
-    )
-  )
-}
-
-
-############################################################
-# 7. MODEL V
-#    Five-dimensional Gaussian dependence
-#
-#    X ~ N_5(0,I_5)
-#    epsilon ~ N_5(0,I_5)
-#
-#    Y = rho X + sqrt(1-rho^2) epsilon
-#
-#    rho = 0.5
-############################################################
-
-generate_model_5 <- function(
-    n,
-    rho = 0.5) {
-  
-  X <- matrix(
-    rnorm(5 * n),
-    nrow = n,
-    ncol = 5
-  )
-  
-  epsilon <- matrix(
-    rnorm(5 * n),
-    nrow = n,
-    ncol = 5
-  )
-  
-  Y <- rho * X +
-    sqrt(1 - rho^2) * epsilon
-  
-  colnames(X) <- paste0(
-    "X",
-    1:5
-  )
-  
-  colnames(Y) <- paste0(
-    "Y",
-    1:5
-  )
-  
-  return(
-    list(
-      X = X,
-      Y = Y
-    )
-  )
-}
-
-
-############################################################
-# 8. GENERAL DATA-GENERATING FUNCTION
-############################################################
-
-generate_data <- function(
-    model,
-    n) {
-  
-  if (model == 1) {
-    
-    return(
-      generate_model_1(n)
-    )
-    
-  } else if (model == 2) {
-    
-    return(
-      generate_model_2(n)
-    )
-    
-  } else if (model == 3) {
-    
-    return(
-      generate_model_3(n)
-    )
-    
-  } else if (model == 4) {
-    
-    return(
-      generate_model_4(n)
-    )
-    
-  } else if (model == 5) {
-    
-    return(
-      generate_model_5(n)
-    )
-    
-  } else {
-    
-    stop(
-      "Model must be one of 1, 2, 3, 4, or 5."
-    )
+  if (length(x) < 5) {
+    return(0)
   }
-}
-
-
-############################################################
-# 9. MATRIX CONVERSION FUNCTION
-############################################################
-
-as_data_matrix <- function(x) {
   
-  if (is.null(dim(x))) {
-    
-    return(
-      matrix(
-        x,
-        ncol = 1
-      )
-    )
-    
-  } else {
-    
-    return(
-      as.matrix(x)
-    )
-  }
-}
-
-
-############################################################
-# 10. BERGSMA--DASSIOS TAU* STATISTIC
-#
-# For Models I--IV:
-#   standard scalar tau*
-#
-# For Model V:
-#   maximum absolute coordinatewise tau*
-############################################################
-
-tau_star_scalar <- function(
-    x,
-    y) {
-  
-  as.numeric(
+  z <- tryCatch(
     TauStar::tStar(
       x,
       y,
       method = "heller"
-    )
+    ),
+    error = function(e) {
+      NA_real_
+    }
   )
+  
+  if (!is.finite(z)) {
+    return(0)
+  }
+  
+  abs(as.numeric(z))
 }
 
-
 ############################################################
-# 11. COORDINATEWISE MAXIMUM TAU*
-#
-# Used only for the five-dimensional model.
-#
-# T_tau,max =
-# max_{j,k} |tau*(X_j,Y_k)|
+# 4. DISTANCE COVARIANCE
 ############################################################
 
-tau_star_max <- function(
-    X,
-    Y) {
+distance_covariance <- function(X, Y) {
   
-  X <- as_data_matrix(X)
+  X <- as.matrix(X)
+  Y <- as.matrix(Y)
   
-  Y <- as_data_matrix(Y)
+  n <- nrow(X)
+  
+  if (nrow(Y) != n) {
+    stop("X and Y must have the same number of observations.")
+  }
+  
+  DX <- as.matrix(dist(X))
+  DY <- as.matrix(dist(Y))
+  
+  A <- DX -
+    matrix(rowMeans(DX), n, n, byrow = TRUE) -
+    matrix(colMeans(DX), n, n, byrow = FALSE) +
+    mean(DX)
+  
+  B <- DY -
+    matrix(rowMeans(DY), n, n, byrow = TRUE) -
+    matrix(colMeans(DY), n, n, byrow = FALSE) +
+    mean(DY)
+  
+  dcov2 <- mean(A * B)
+  
+  sqrt(max(dcov2, 0))
+}
+
+############################################################
+# 5. HHG-STYLE GRAPH STATISTIC
+#
+# For each observation i, observations are ranked according
+# to their distances from i in X-space and Y-space.
+#
+# For every pair of neighbourhood sizes (kx, ky), a 2 x 2
+# contingency table is formed:
+#
+#                 Y-neighbour   Y-nonneighbour
+# X-neighbour          a              b
+# X-nonneighbour       c              d
+#
+# The local Pearson chi-square statistics are calculated,
+# and the maximum is used as the global HHG-style statistic.
+############################################################
+
+hhg_statistic <- function(X, Y) {
+  
+  X <- as.matrix(X)
+  Y <- as.matrix(Y)
+  
+  n <- nrow(X)
+  
+  if (nrow(Y) != n) {
+    stop("X and Y must have the same number of observations.")
+  }
+  
+  if (n < 5) {
+    return(0)
+  }
+  
+  DX <- as.matrix(dist(X))
+  DY <- as.matrix(dist(Y))
+  
+  max_chisq <- 0
+  
+  ##########################################################
+  # Loop over anchor observations
+  ##########################################################
+  
+  for (i in seq_len(n)) {
+    
+    ########################################################
+    # Rank distances from observation i
+    ########################################################
+    
+    rx <- rank(
+      DX[i, ],
+      ties.method = "first"
+    )
+    
+    ry <- rank(
+      DY[i, ],
+      ties.method = "first"
+    )
+    
+    ########################################################
+    # The anchor itself must never belong to a neighbourhood
+    ########################################################
+    
+    rx[i] <- Inf
+    ry[i] <- Inf
+    
+    ########################################################
+    # Neighbourhood sizes
+    ########################################################
+    
+    for (kx in 1:(n - 2)) {
+      
+      in_x <- rx <= kx
+      
+      in_x[i] <- FALSE
+      
+      nx <- sum(in_x)
+      
+      if (nx == 0 || nx >= n - 1) {
+        next
+      }
+      
+      for (ky in 1:(n - 2)) {
+        
+        in_y <- ry <= ky
+        
+        in_y[i] <- FALSE
+        
+        ny <- sum(in_y)
+        
+        if (ny == 0 || ny >= n - 1) {
+          next
+        }
+        
+        ####################################################
+        # 2 x 2 contingency table
+        ####################################################
+        
+        a <- sum(in_x & in_y)
+        
+        b <- sum(in_x & !in_y)
+        
+        c <- sum(!in_x & in_y)
+        
+        d <- sum(!in_x & !in_y)
+        
+        ####################################################
+        # Pearson chi-square statistic
+        ####################################################
+        
+        denominator <-
+          (a + b) *
+          (c + d) *
+          (a + c) *
+          (b + d)
+        
+        if (denominator <= 0) {
+          next
+        }
+        
+        chisq <-
+          (n - 1) *
+          (a * d - b * c)^2 /
+          denominator
+        
+        if (is.finite(chisq) &&
+            chisq > max_chisq) {
+          
+          max_chisq <- chisq
+        }
+      }
+    }
+  }
+  
+  as.numeric(max_chisq)
+}
+
+############################################################
+# 6. COORDINATEWISE MAXIMUM TAU*
+#
+# Used for the five-dimensional Model V.
+############################################################
+
+tau_star_max <- function(X, Y) {
+  
+  X <- as.matrix(X)
+  Y <- as.matrix(Y)
   
   p <- ncol(X)
-  
   q <- ncol(Y)
   
-  tau.matrix <- matrix(
-    NA_real_,
-    nrow = p,
-    ncol = q
-  )
+  values <- numeric(p * q)
+  
+  z <- 1
   
   for (j in seq_len(p)) {
     
     for (k in seq_len(q)) {
       
-      tau.matrix[j, k] <-
+      values[z] <-
         tau_star_scalar(
           X[, j],
           Y[, k]
         )
+      
+      z <- z + 1
     }
   }
   
-  return(
-    max(
-      abs(tau.matrix)
-    )
-  )
+  max(values, na.rm = TRUE)
 }
 
+############################################################
+# 7. DATA-GENERATING MODELS
+############################################################
+
+generate_model <- function(model, n) {
+  
+  ##########################################################
+  # MODEL I: LINEAR
+  ##########################################################
+  
+  if (model == 1) {
+    
+    X <- rnorm(n)
+    
+    epsilon <- rnorm(
+      n,
+      mean = 0,
+      sd = 0.5
+    )
+    
+    Y <- X + epsilon
+    
+    return(
+      list(
+        X = matrix(X, ncol = 1),
+        Y = matrix(Y, ncol = 1)
+      )
+    )
+  }
+  
+  ##########################################################
+  # MODEL II: QUADRATIC
+  ##########################################################
+  
+  if (model == 2) {
+    
+    X <- rnorm(n)
+    
+    epsilon <- rnorm(
+      n,
+      mean = 0,
+      sd = 0.5
+    )
+    
+    Y <- X^2 + epsilon
+    
+    return(
+      list(
+        X = matrix(X, ncol = 1),
+        Y = matrix(Y, ncol = 1)
+      )
+    )
+  }
+  
+  ##########################################################
+  # MODEL III: CIRCULAR
+  ##########################################################
+  
+  if (model == 3) {
+    
+    theta <- runif(
+      n,
+      min = 0,
+      max = 2 * pi
+    )
+    
+    epsilon <- rnorm(n)
+    
+    R <- 1 + 0.1 * epsilon
+    
+    X <- R * cos(theta)
+    
+    Y <- R * sin(theta)
+    
+    return(
+      list(
+        X = matrix(X, ncol = 1),
+        Y = matrix(Y, ncol = 1)
+      )
+    )
+  }
+  
+  ##########################################################
+  # MODEL IV: ORDINAL
+  ##########################################################
+  
+  if (model == 4) {
+    
+    X <- rnorm(n)
+    
+    epsilon <- rnorm(n)
+    
+    Y.star <- X + epsilon
+    
+    Y <- ifelse(
+      Y.star <= -0.5,
+      1,
+      ifelse(
+        Y.star <= 0.5,
+        2,
+        3
+      )
+    )
+    
+    return(
+      list(
+        X = matrix(X, ncol = 1),
+        Y = matrix(Y, ncol = 1)
+      )
+    )
+  }
+  
+  ##########################################################
+  # MODEL V: FIVE-DIMENSIONAL GAUSSIAN
+  ##########################################################
+  
+  if (model == 5) {
+    
+    p <- 5
+    
+    rho <- 0.5
+    
+    X <- matrix(
+      rnorm(n * p),
+      nrow = n,
+      ncol = p
+    )
+    
+    epsilon <- matrix(
+      rnorm(n * p),
+      nrow = n,
+      ncol = p
+    )
+    
+    Y <-
+      rho * X +
+      sqrt(1 - rho^2) * epsilon
+    
+    return(
+      list(
+        X = X,
+        Y = Y
+      )
+    )
+  }
+  
+  stop("Invalid model number.")
+}
 
 ############################################################
-# 12. TAU* OBSERVED STATISTIC
+# 8. OBSERVED TEST STATISTICS
 ############################################################
 
-tau_statistic <- function(
-    X,
-    Y) {
+calculate_statistics <- function(X, Y) {
   
-  X <- as_data_matrix(X)
-  
-  Y <- as_data_matrix(Y)
+  ##########################################################
+  # TAU*
+  ##########################################################
   
   if (
     ncol(X) == 1 &&
     ncol(Y) == 1
   ) {
     
-    return(
-      abs(
-        tau_star_scalar(
-          X[, 1],
-          Y[, 1]
-        )
+    tau_obs <-
+      tau_star_scalar(
+        X[, 1],
+        Y[, 1]
       )
-    )
     
   } else {
     
-    return(
+    tau_obs <-
       tau_star_max(
         X,
         Y
       )
-    )
   }
-}
-
-
-############################################################
-# 13. DISTANCE COVARIANCE STATISTIC
-#
-# The distance covariance is computed directly from
-# doubly centered Euclidean distance matrices.
-#
-# No additional package is required.
-############################################################
-
-dcov_statistic <- function(
-    X,
-    Y) {
-  
-  X <- as_data_matrix(X)
-  
-  Y <- as_data_matrix(Y)
-  
-  n <- nrow(X)
-  
   
   ##########################################################
-  # Euclidean distance matrices
+  # DISTANCE COVARIANCE
   ##########################################################
   
-  A <- as.matrix(
-    dist(X)
-  )
-  
-  B <- as.matrix(
-    dist(Y)
-  )
-  
-  
-  ##########################################################
-  # Double centering
-  ##########################################################
-  
-  A <- A -
-    matrix(
-      rowMeans(A),
-      nrow = n,
-      ncol = n
-    ) -
-    matrix(
-      colMeans(A),
-      nrow = n,
-      ncol = n,
-      byrow = TRUE
-    ) +
-    mean(A)
-  
-  
-  B <- B -
-    matrix(
-      rowMeans(B),
-      nrow = n,
-      ncol = n
-    ) -
-    matrix(
-      colMeans(B),
-      nrow = n,
-      ncol = n,
-      byrow = TRUE
-    ) +
-    mean(B)
-  
-  
-  ##########################################################
-  # Sample distance covariance
-  ##########################################################
-  
-  dcov2 <- mean(
-    A * B
-  )
-  
-  return(
-    sqrt(
-      max(
-        dcov2,
-        0
-      )
+  dcov_obs <-
+    distance_covariance(
+      X,
+      Y
     )
+  
+  ##########################################################
+  # HHG
+  ##########################################################
+  
+  hhg_obs <-
+    hhg_statistic(
+      X,
+      Y
+    )
+  
+  c(
+    tau_star = tau_obs,
+    dCov = dcov_obs,
+    HHG = hhg_obs
   )
 }
 
-
 ############################################################
-# 14. GENERIC PERMUTATION TEST
-#
-# Used for tau* and distance covariance.
+# 9. PERMUTATION TEST
 ############################################################
 
 permutation_test <- function(
     X,
     Y,
-    statistic_function,
-    M = 1000) {
-  
-  X <- as_data_matrix(X)
-  
-  Y <- as_data_matrix(Y)
-  
-  n <- nrow(X)
-  
+    M = 500,
+    alpha = 0.05) {
   
   ##########################################################
-  # Observed statistic
+  # Observed statistics
   ##########################################################
   
-  observed <- statistic_function(
-    X,
-    Y
-  )
-  
+  observed <-
+    calculate_statistics(
+      X,
+      Y
+    )
   
   ##########################################################
-  # Permutation statistics
+  # Storage
   ##########################################################
   
-  permuted_statistics <- numeric(M)
+  tau_perm <- numeric(M)
+  
+  dcov_perm <- numeric(M)
+  
+  hhg_perm <- numeric(M)
+  
+  ##########################################################
+  # Permutations
+  ##########################################################
   
   for (m in seq_len(M)) {
     
-    permutation <- sample.int(
-      n,
-      size = n,
+    index <- sample.int(
+      nrow(Y),
+      size = nrow(Y),
       replace = FALSE
     )
     
-    Y.permuted <-
-      Y[
-        permutation,
-        ,
-        drop = FALSE
-      ]
+    Y_perm <-
+      Y[index, , drop = FALSE]
     
-    permuted_statistics[m] <-
-      statistic_function(
+    ########################################################
+    # tau*
+    ########################################################
+    
+    if (
+      ncol(X) == 1 &&
+      ncol(Y) == 1
+    ) {
+      
+      tau_perm[m] <-
+        tau_star_scalar(
+          X[, 1],
+          Y_perm[, 1]
+        )
+      
+    } else {
+      
+      tau_perm[m] <-
+        tau_star_max(
+          X,
+          Y_perm
+        )
+    }
+    
+    ########################################################
+    # dCov
+    ########################################################
+    
+    dcov_perm[m] <-
+      distance_covariance(
         X,
-        Y.permuted
+        Y_perm
+      )
+    
+    ########################################################
+    # HHG
+    ########################################################
+    
+    hhg_perm[m] <-
+      hhg_statistic(
+        X,
+        Y_perm
       )
   }
   
-  
   ##########################################################
-  # Permutation p-value
+  # Permutation p-values
   ##########################################################
   
-  p.value <- (
-    1 +
-      sum(
-        permuted_statistics >=
-          observed
-      )
-  ) /
+  p_tau <-
+    (
+      1 +
+        sum(
+          tau_perm >= observed["tau_star"]
+        )
+    ) /
     (M + 1)
   
-  return(
-    p.value
-  )
-}
-
-
-############################################################
-# 15. TAU* PERMUTATION TEST
-############################################################
-
-tau_star_test <- function(
-    X,
-    Y,
-    M = 1000) {
+  p_dcov <-
+    (
+      1 +
+        sum(
+          dcov_perm >= observed["dCov"]
+        )
+    ) /
+    (M + 1)
   
-  permutation_test(
-    X = X,
-    Y = Y,
-    statistic_function = tau_statistic,
-    M = M
-  )
-}
-
-
-############################################################
-# 16. DISTANCE COVARIANCE PERMUTATION TEST
-############################################################
-
-dcov_test <- function(
-    X,
-    Y,
-    M = 1000) {
-  
-  permutation_test(
-    X = X,
-    Y = Y,
-    statistic_function = dcov_statistic,
-    M = M
-  )
-}
-
-
-############################################################
-# 17. ONE MONTE CARLO REPLICATION
-############################################################
-
-one_replication <- function(
-    model,
-    n,
-    M = 1000,
-    alpha = 0.05) {
-  
-  
-  ##########################################################
-  # Generate data
-  ##########################################################
-  
-  data <- generate_data(
-    model = model,
-    n = n
-  )
-  
-  X <- data$X
-  
-  Y <- data$Y
-  
-  
-  ##########################################################
-  # Bergsma--Dassios tau*
-  ##########################################################
-  
-  p_tau <- tau_star_test(
-    X = X,
-    Y = Y,
-    M = M
-  )
-  
-  
-  ##########################################################
-  # Distance covariance
-  ##########################################################
-  
-  p_dcov <- dcov_test(
-    X = X,
-    Y = Y,
-    M = M
-  )
-  
+  p_hhg <-
+    (
+      1 +
+        sum(
+          hhg_perm >= observed["HHG"]
+        )
+    ) /
+    (M + 1)
   
   ##########################################################
   # Rejection indicators
   ##########################################################
   
-  rejection_tau <-
+  reject_tau <-
     as.numeric(
-      p_tau <= alpha
+      p_tau < alpha
     )
   
-  rejection_dcov <-
+  reject_dcov <-
     as.numeric(
-      p_dcov <= alpha
+      p_dcov < alpha
     )
   
-  
-  ##########################################################
-  # Return results
-  ##########################################################
-  
-  return(
-    c(
-      tau_star = rejection_tau,
-      dCov = rejection_dcov
+  reject_hhg <-
+    as.numeric(
+      p_hhg < alpha
     )
+  
+  c(
+    p_tau_star = p_tau,
+    p_dCov = p_dcov,
+    p_HHG = p_hhg,
+    
+    reject_tau_star = reject_tau,
+    reject_dCov = reject_dcov,
+    reject_HHG = reject_hhg
   )
 }
 
+############################################################
+# 10. ONE MONTE CARLO REPLICATION
+############################################################
+
+one_replication <- function(
+    model,
+    n,
+    M = 500,
+    alpha = 0.05) {
+  
+  dat <-
+    generate_model(
+      model = model,
+      n = n
+    )
+  
+  permutation_test(
+    X = dat$X,
+    Y = dat$Y,
+    M = M,
+    alpha = alpha
+  )
+}
 
 ############################################################
-# 18. RUN ONE MODEL AND ONE SAMPLE SIZE
+# 11. RUN ONE MODEL / SAMPLE SIZE
 ############################################################
 
 run_condition <- function(
@@ -689,27 +669,38 @@ run_condition <- function(
     M = 500,
     alpha = 0.05) {
   
-  rejection_matrix <- matrix(
-    0,
-    nrow = B,
-    ncol = 2
-  )
+  rejection_matrix <-
+    matrix(
+      0,
+      nrow = B,
+      ncol = 3
+    )
   
-  colnames(
-    rejection_matrix
-  ) <- c(
-    "tau_star",
-    "dCov"
-  )
-  
-  
-  ##########################################################
-  # Monte Carlo replications
-  ##########################################################
+  colnames(rejection_matrix) <-
+    c(
+      "tau_star",
+      "dCov",
+      "HHG"
+    )
   
   for (b in seq_len(B)) {
     
-    rejection_matrix[b, ] <-
+    if (b %% 100 == 0) {
+      
+      cat(
+        "Model =",
+        model,
+        "| n =",
+        n,
+        "| Replication =",
+        b,
+        "/",
+        B,
+        "\n"
+      )
+    }
+    
+    z <-
       one_replication(
         model = model,
         n = n,
@@ -717,149 +708,200 @@ run_condition <- function(
         alpha = alpha
       )
     
-    if (
-      b %% 100 == 0
-    ) {
-      
-      cat(
-        "Model:",
-        model,
-        "| n:",
-        n,
-        "| Replication:",
-        b,
-        "of",
-        B,
-        "\n"
+    rejection_matrix[b, ] <-
+      c(
+        z["reject_tau_star"],
+        z["reject_dCov"],
+        z["reject_HHG"]
       )
-    }
   }
-  
   
   ##########################################################
   # Empirical power
   ##########################################################
   
-  power <- colMeans(
-    rejection_matrix
-  )
-  
-  
-  return(
-    data.frame(
-      Model = model,
-      Sample_Size = n,
-      tau_star = power["tau_star"],
-      dCov = power["dCov"],
-      row.names = NULL
+  power <-
+    colMeans(
+      rejection_matrix
     )
-  )
-}
-
-
-############################################################
-# 19. COMPLETE SIMULATION
-############################################################
-
-run_complete_simulation <- function(
-    n.grid = c(30, 50, 100),
-    B = 2000,
-    M = 500,
-    alpha = 0.05) {
-  
-  all_results <- list()
-  
-  counter <- 1
-  
   
   ##########################################################
-  # Loop over models and sample sizes
+  # Monte Carlo standard error
   ##########################################################
   
-  for (model in 1:5) {
+  MCSE <-
+    sqrt(
+      power * (1 - power) / B
+    )
+  
+  data.frame(
+    Model = model,
+    n = n,
     
-    for (n in n.grid) {
-      
-      cat(
-        "\n====================================\n"
-      )
-      
-      cat(
-        "Starting Model:",
-        model,
-        "| Sample size:",
-        n,
-        "\n"
-      )
-      
-      cat(
-        "====================================\n"
-      )
-      
-      
-      all_results[[counter]] <-
-        run_condition(
-          model = model,
-          n = n,
-          B = B,
-          M = M,
-          alpha = alpha
-        )
-      
-      counter <- counter + 1
-    }
-  }
-  
-  
-  ##########################################################
-  # Combine results
-  ##########################################################
-  
-  final_results <- do.call(
-    rbind,
-    all_results
-  )
-  
-  rownames(
-    final_results
-  ) <- NULL
-  
-  return(
-    final_results
+    tau_star = unname(
+      power["tau_star"]
+    ),
+    
+    dCov = unname(
+      power["dCov"]
+    ),
+    
+    HHG = unname(
+      power["HHG"]
+    ),
+    
+    MCSE_tau_star = unname(
+      MCSE["tau_star"]
+    ),
+    
+    MCSE_dCov = unname(
+      MCSE["dCov"]
+    ),
+    
+    MCSE_HHG = unname(
+      MCSE["HHG"]
+    ),
+    
+    row.names = NULL
   )
 }
 
-
 ############################################################
-# 20. RUN THE SIMULATION
-#
-# Uncomment/run this command when the simulation is required.
+# 12. COMPLETE SIMULATION
 ############################################################
 
-simulation_results <-
-  run_complete_simulation(
-    n.grid = c(30, 50, 100),
-    B = 2000,
-    M = 500,
-    alpha = 0.05
+results_list <- list()
+
+counter <- 1
+
+for (model in 1:5) {
+  
+  for (n in n.grid) {
+    
+    cat(
+      "\n============================================\n"
+    )
+    
+    cat(
+      "Model:",
+      model,
+      "| Sample size:",
+      n,
+      "\n"
+    )
+    
+    cat(
+      "============================================\n"
+    )
+    
+    results_list[[counter]] <-
+      run_condition(
+        model = model,
+        n = n,
+        B = B,
+        M = M,
+        alpha = alpha
+      )
+    
+    counter <- counter + 1
+  }
+}
+
+############################################################
+# 13. COMBINE RESULTS
+############################################################
+
+results <-
+  do.call(
+    rbind,
+    results_list
   )
 
+rownames(results) <- NULL
 
 ############################################################
-# 21. SAVE THE RESULTS
+# 14. MODEL LABELS
 ############################################################
 
-write.csv(
-  simulation_results,
-  file = "comparative_power_results.csv",
-  row.names = FALSE
-)
-
+results$Model_Name <-
+  c(
+    "Linear",
+    "Linear",
+    "Linear",
+    "Quadratic",
+    "Quadratic",
+    "Quadratic",
+    "Circular",
+    "Circular",
+    "Circular",
+    "Ordinal",
+    "Ordinal",
+    "Ordinal",
+    "5D Gaussian",
+    "5D Gaussian",
+    "5D Gaussian"
+  )
 
 ############################################################
-# 22. DISPLAY THE RESULTS
+# 15. REORDER RESULTS
+############################################################
+
+results <-
+  results[
+    ,
+    c(
+      "Model",
+      "Model_Name",
+      "n",
+      "tau_star",
+      "dCov",
+      "HHG",
+      "MCSE_tau_star",
+      "MCSE_dCov",
+      "MCSE_HHG"
+    )
+  ]
+
+############################################################
+# 16. DISPLAY RESULTS
 ############################################################
 
 print(
-  simulation_results
+  results,
+  row.names = FALSE
 )
+
+############################################################
+# 17. SAVE COMPLETE RESULTS
+############################################################
+
+write.csv(
+  results,
+  "comparative_power_results_tau_dCov_HHG.csv",
+  row.names = FALSE
+)
+
+############################################################
+# 18. COMPACT POWER TABLE
+############################################################
+
+power_table <-
+  results[
+    ,
+    c(
+      "Model_Name",
+      "n",
+      "tau_star",
+      "dCov",
+      "HHG"
+    )
+  ]
+
+print(
+  power_table,
+  row.names = FALSE
+)
+
+############################################################
+# END
+############################################################
